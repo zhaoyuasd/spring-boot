@@ -18,18 +18,17 @@ package org.springframework.boot.actuate.web.mappings.servlet;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import jakarta.servlet.Filter;
 import jakarta.servlet.ServletContext;
 
+import org.springframework.aot.hint.BindingReflectionHintsRegistrar;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
 import org.springframework.boot.actuate.web.mappings.MappingDescriptionProvider;
 import org.springframework.boot.actuate.web.mappings.servlet.FiltersMappingDescriptionProvider.FiltersMappingDescriptionProviderRuntimeHints;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.ImportRuntimeHints;
-import org.springframework.context.aot.BindingReflectionHintsRegistrar;
 import org.springframework.web.context.WebApplicationContext;
 
 /**
@@ -46,7 +45,7 @@ public class FiltersMappingDescriptionProvider implements MappingDescriptionProv
 	public List<FilterRegistrationMappingDescription> describeMappings(ApplicationContext context) {
 		if (context instanceof WebApplicationContext webApplicationContext) {
 			return webApplicationContext.getServletContext().getFilterRegistrations().values().stream()
-					.map(FilterRegistrationMappingDescription::new).collect(Collectors.toList());
+					.map(FilterRegistrationMappingDescription::new).toList();
 		}
 		return Collections.emptyList();
 	}

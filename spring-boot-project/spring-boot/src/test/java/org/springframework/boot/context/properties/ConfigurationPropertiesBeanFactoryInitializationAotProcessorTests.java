@@ -26,16 +26,13 @@ import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
 
-import org.springframework.aot.generate.ClassNameGenerator;
-import org.springframework.aot.generate.DefaultGenerationContext;
 import org.springframework.aot.generate.GenerationContext;
-import org.springframework.aot.generate.InMemoryGeneratedFiles;
 import org.springframework.aot.hint.ExecutableHint;
-import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.TypeHint;
 import org.springframework.aot.hint.TypeReference;
 import org.springframework.aot.hint.predicate.RuntimeHintsPredicates;
+import org.springframework.aot.test.generate.TestGenerationContext;
 import org.springframework.beans.factory.aot.AotServices;
 import org.springframework.beans.factory.aot.BeanFactoryInitializationAotContribution;
 import org.springframework.beans.factory.aot.BeanFactoryInitializationAotProcessor;
@@ -43,6 +40,7 @@ import org.springframework.beans.factory.aot.BeanFactoryInitializationCode;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.beans.factory.support.RootBeanDefinition;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.EnvironmentAware;
@@ -56,6 +54,7 @@ import static org.mockito.Mockito.mock;
  *
  * @author Stephane Nicoll
  * @author Moritz Halbritter
+ * @author Sebastien Deleuze
  */
 class ConfigurationPropertiesBeanFactoryInitializationAotProcessorTests {
 
@@ -84,13 +83,6 @@ class ConfigurationPropertiesBeanFactoryInitializationAotProcessorTests {
 	}
 
 	@Test
-	void registerConfigurationPropertiesAnnotation() {
-		RuntimeHints runtimeHints = process(SampleProperties.class);
-		assertThat(runtimeHints.reflection().getTypeHint(ConfigurationProperties.class)).satisfies(
-				(hint) -> assertThat(hint.getMemberCategories()).contains(MemberCategory.INVOKE_DECLARED_METHODS));
-	}
-
-	@Test
 	void processJavaBeanConfigurationProperties() {
 		RuntimeHints runtimeHints = process(SampleProperties.class);
 		assertThat(runtimeHints.reflection().getTypeHint(SampleProperties.class))
@@ -111,7 +103,7 @@ class ConfigurationPropertiesBeanFactoryInitializationAotProcessorTests {
 		List<TypeHint> typeHints = runtimeHints.reflection().typeHints().toList();
 		assertThat(typeHints).anySatisfy(javaBeanBinding(SamplePropertiesWithMap.class));
 		assertThat(typeHints).anySatisfy(javaBeanBinding(Address.class));
-		assertThat(typeHints).hasSize(3);
+		assertThat(typeHints).hasSize(2);
 	}
 
 	@Test
@@ -120,7 +112,7 @@ class ConfigurationPropertiesBeanFactoryInitializationAotProcessorTests {
 		List<TypeHint> typeHints = runtimeHints.reflection().typeHints().toList();
 		assertThat(typeHints).anySatisfy(javaBeanBinding(SamplePropertiesWithList.class));
 		assertThat(typeHints).anySatisfy(javaBeanBinding(Address.class));
-		assertThat(typeHints).hasSize(3);
+		assertThat(typeHints).hasSize(2);
 	}
 
 	@Test
@@ -129,7 +121,7 @@ class ConfigurationPropertiesBeanFactoryInitializationAotProcessorTests {
 		List<TypeHint> typeHints = runtimeHints.reflection().typeHints().toList();
 		assertThat(typeHints).anySatisfy(javaBeanBinding(SamplePropertiesWithArray.class));
 		assertThat(typeHints).anySatisfy(javaBeanBinding(Address.class));
-		assertThat(typeHints).hasSize(3);
+		assertThat(typeHints).hasSize(2);
 	}
 
 	@Test
@@ -137,7 +129,7 @@ class ConfigurationPropertiesBeanFactoryInitializationAotProcessorTests {
 		RuntimeHints runtimeHints = process(SamplePropertiesWithSimpleList.class);
 		List<TypeHint> typeHints = runtimeHints.reflection().typeHints().toList();
 		assertThat(typeHints).anySatisfy(javaBeanBinding(SamplePropertiesWithSimpleList.class));
-		assertThat(typeHints).hasSize(2);
+		assertThat(typeHints).hasSize(1);
 	}
 
 	@Test
@@ -146,7 +138,7 @@ class ConfigurationPropertiesBeanFactoryInitializationAotProcessorTests {
 		List<TypeHint> typeHints = runtimeHints.reflection().typeHints().toList();
 		assertThat(typeHints).anySatisfy(valueObjectBinding(SampleImmutableProperties.class,
 				SampleImmutableProperties.class.getDeclaredConstructors()[0]));
-		assertThat(typeHints).hasSize(2);
+		assertThat(typeHints).hasSize(1);
 	}
 
 	@Test
@@ -155,7 +147,7 @@ class ConfigurationPropertiesBeanFactoryInitializationAotProcessorTests {
 		List<TypeHint> typeHints = runtimeHints.reflection().typeHints().toList();
 		assertThat(typeHints).anySatisfy(valueObjectBinding(SampleImmutablePropertiesWithSeveralConstructors.class,
 				SampleImmutablePropertiesWithSeveralConstructors.class.getDeclaredConstructor(String.class)));
-		assertThat(typeHints).hasSize(2);
+		assertThat(typeHints).hasSize(1);
 	}
 
 	@Test
@@ -166,7 +158,7 @@ class ConfigurationPropertiesBeanFactoryInitializationAotProcessorTests {
 				SampleImmutablePropertiesWithList.class.getDeclaredConstructors()[0]));
 		assertThat(typeHints).anySatisfy(valueObjectBinding(Person.class, Person.class.getDeclaredConstructors()[0]));
 		assertThat(typeHints).anySatisfy(valueObjectBinding(Address.class, Address.class.getDeclaredConstructors()[0]));
-		assertThat(typeHints).hasSize(4);
+		assertThat(typeHints).hasSize(3);
 	}
 
 	@Test
@@ -182,7 +174,7 @@ class ConfigurationPropertiesBeanFactoryInitializationAotProcessorTests {
 		assertThat(runtimeHints.reflection().typeHints())
 				.anySatisfy(javaBeanBinding(SamplePropertiesWithExternalNested.class))
 				.anySatisfy(javaBeanBinding(SampleType.class)).anySatisfy(javaBeanBinding(SampleType.Nested.class))
-				.hasSize(4);
+				.hasSize(3);
 	}
 
 	@Test
@@ -190,7 +182,7 @@ class ConfigurationPropertiesBeanFactoryInitializationAotProcessorTests {
 		RuntimeHints runtimeHints = process(SamplePropertiesWithRecursive.class);
 		assertThat(runtimeHints.reflection().typeHints())
 				.anySatisfy(javaBeanBinding(SamplePropertiesWithRecursive.class))
-				.anySatisfy(javaBeanBinding(Recursive.class)).hasSize(3);
+				.anySatisfy(javaBeanBinding(Recursive.class)).hasSize(2);
 	}
 
 	@Test
@@ -201,16 +193,14 @@ class ConfigurationPropertiesBeanFactoryInitializationAotProcessorTests {
 						SampleImmutablePropertiesWithRecursive.class.getDeclaredConstructors()[0]))
 				.anySatisfy(valueObjectBinding(ImmutableRecursive.class,
 						ImmutableRecursive.class.getDeclaredConstructors()[0]))
-				.hasSize(3);
+				.hasSize(2);
 	}
 
 	@Test
 	void processConfigurationPropertiesWithWellKnownTypes() {
 		RuntimeHints runtimeHints = process(SamplePropertiesWithWellKnownTypes.class);
 		assertThat(runtimeHints.reflection().typeHints())
-				.anySatisfy(javaBeanBinding(SamplePropertiesWithWellKnownTypes.class))
-				// TODO
-				.hasSize(2);
+				.anySatisfy(javaBeanBinding(SamplePropertiesWithWellKnownTypes.class)).hasSize(1);
 	}
 
 	@Test
@@ -219,7 +209,7 @@ class ConfigurationPropertiesBeanFactoryInitializationAotProcessorTests {
 		assertThat(runtimeHints.reflection().typeHints())
 				.anySatisfy(javaBeanBinding(SamplePropertiesWithCrossReference.class))
 				.anySatisfy(javaBeanBinding(CrossReferenceA.class)).anySatisfy(javaBeanBinding(CrossReferenceB.class))
-				.hasSize(4);
+				.hasSize(3);
 	}
 
 	@Test
@@ -232,26 +222,17 @@ class ConfigurationPropertiesBeanFactoryInitializationAotProcessorTests {
 	@Test
 	void processConfigurationPropertiesWithNestedGenerics() {
 		RuntimeHints runtimeHints = process(NestedGenerics.class);
-		assertThat(RuntimeHintsPredicates.reflection().onType(NestedGenerics.class)
-				.withMemberCategories(MemberCategory.INVOKE_DECLARED_METHODS, MemberCategory.INVOKE_PUBLIC_METHODS))
-						.accepts(runtimeHints);
-		assertThat(RuntimeHintsPredicates.reflection().onType(NestedGenerics.Nested.class)
-				.withMemberCategories(MemberCategory.INVOKE_DECLARED_METHODS, MemberCategory.INVOKE_PUBLIC_METHODS))
-						.accepts(runtimeHints);
+		assertThat(RuntimeHintsPredicates.reflection().onType(NestedGenerics.class)).accepts(runtimeHints);
+		assertThat(RuntimeHintsPredicates.reflection().onType(NestedGenerics.Nested.class)).accepts(runtimeHints);
 	}
 
 	@Test
 	void processConfigurationPropertiesWithMultipleNestedClasses() {
 		RuntimeHints runtimeHints = process(TripleNested.class);
-		assertThat(RuntimeHintsPredicates.reflection().onType(TripleNested.class)
-				.withMemberCategories(MemberCategory.INVOKE_DECLARED_METHODS, MemberCategory.INVOKE_PUBLIC_METHODS))
-						.accepts(runtimeHints);
-		assertThat(RuntimeHintsPredicates.reflection().onType(TripleNested.DoubleNested.class)
-				.withMemberCategories(MemberCategory.INVOKE_DECLARED_METHODS, MemberCategory.INVOKE_PUBLIC_METHODS))
-						.accepts(runtimeHints);
-		assertThat(RuntimeHintsPredicates.reflection().onType(TripleNested.DoubleNested.Nested.class)
-				.withMemberCategories(MemberCategory.INVOKE_DECLARED_METHODS, MemberCategory.INVOKE_PUBLIC_METHODS))
-						.accepts(runtimeHints);
+		assertThat(RuntimeHintsPredicates.reflection().onType(TripleNested.class)).accepts(runtimeHints);
+		assertThat(RuntimeHintsPredicates.reflection().onType(TripleNested.DoubleNested.class)).accepts(runtimeHints);
+		assertThat(RuntimeHintsPredicates.reflection().onType(TripleNested.DoubleNested.Nested.class))
+				.accepts(runtimeHints);
 	}
 
 	private Consumer<TypeHint> javaBeanBinding(Class<?> type) {
@@ -262,8 +243,9 @@ class ConfigurationPropertiesBeanFactoryInitializationAotProcessorTests {
 		return (entry) -> {
 			assertThat(entry.getType()).isEqualTo(TypeReference.of(type));
 			assertThat(entry.constructors()).singleElement().satisfies(match(constructor));
-			assertThat(entry.getMemberCategories()).containsOnly(MemberCategory.INVOKE_DECLARED_METHODS,
-					MemberCategory.INVOKE_PUBLIC_METHODS);
+			assertThat(entry.getMemberCategories()).isEmpty();
+			assertThat(entry.methods()).allMatch((t) -> t.getName().startsWith("set") || t.getName().startsWith("get")
+					|| t.getName().startsWith("is"));
 		};
 	}
 
@@ -271,8 +253,8 @@ class ConfigurationPropertiesBeanFactoryInitializationAotProcessorTests {
 		return (entry) -> {
 			assertThat(entry.getType()).isEqualTo(TypeReference.of(type));
 			assertThat(entry.constructors()).singleElement().satisfies(match(constructor));
-			assertThat(entry.getMemberCategories()).containsOnly(MemberCategory.INVOKE_DECLARED_METHODS,
-					MemberCategory.INVOKE_PUBLIC_METHODS);
+			assertThat(entry.getMemberCategories()).isEmpty();
+			assertThat(entry.methods()).isEmpty();
 		};
 	}
 
@@ -295,8 +277,7 @@ class ConfigurationPropertiesBeanFactoryInitializationAotProcessorTests {
 	private RuntimeHints process(ConfigurableListableBeanFactory beanFactory) {
 		BeanFactoryInitializationAotContribution contribution = this.processor.processAheadOfTime(beanFactory);
 		assertThat(contribution).isNotNull();
-		GenerationContext generationContext = new DefaultGenerationContext(new ClassNameGenerator(Object.class),
-				new InMemoryGeneratedFiles());
+		GenerationContext generationContext = new TestGenerationContext();
 		contribution.applyTo(generationContext, mock(BeanFactoryInitializationCode.class));
 		return generationContext.getRuntimeHints();
 	}

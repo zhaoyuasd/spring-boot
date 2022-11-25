@@ -96,7 +96,6 @@ import org.springframework.web.servlet.DispatcherServlet;
 import org.springframework.web.servlet.FlashMapManager;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 import org.springframework.web.servlet.LocaleResolver;
-import org.springframework.web.servlet.ThemeResolver;
 import org.springframework.web.servlet.View;
 import org.springframework.web.servlet.ViewResolver;
 import org.springframework.web.servlet.config.annotation.AsyncSupportConfigurer;
@@ -115,6 +114,7 @@ import org.springframework.web.servlet.i18n.FixedLocaleResolver;
 import org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import org.springframework.web.servlet.resource.EncodedResourceResolver;
 import org.springframework.web.servlet.resource.ResourceResolver;
 import org.springframework.web.servlet.resource.ResourceUrlProvider;
@@ -176,7 +176,6 @@ public class WebMvcAutoConfiguration {
 
 	// Defined as a nested config to ensure WebMvcConfigurer is not read when not
 	// on the classpath
-	@SuppressWarnings("deprecation")
 	@Configuration(proxyBeanMethods = false)
 	@Import(EnableWebMvcConfiguration.class)
 	@EnableConfigurationProperties({ WebMvcProperties.class, WebProperties.class })
@@ -213,7 +212,6 @@ public class WebMvcAutoConfiguration {
 			this.resourceHandlerRegistrationCustomizer = resourceHandlerRegistrationCustomizerProvider.getIfAvailable();
 			this.dispatcherServletPath = dispatcherServletPath;
 			this.servletRegistrations = servletRegistrations;
-			this.mvcProperties.checkConfiguration();
 		}
 
 		@Override
@@ -247,9 +245,6 @@ public class WebMvcAutoConfiguration {
 			if (this.mvcProperties.getPathmatch()
 					.getMatchingStrategy() == WebMvcProperties.MatchingStrategy.ANT_PATH_MATCHER) {
 				configurer.setPathMatcher(new AntPathMatcher());
-				configurer.setUseSuffixPatternMatch(this.mvcProperties.getPathmatch().isUseSuffixPattern());
-				configurer.setUseRegisteredSuffixPatternMatch(
-						this.mvcProperties.getPathmatch().isUseRegisteredSuffixPattern());
 				this.dispatcherServletPath.ifAvailable((dispatcherPath) -> {
 					String servletUrlMapping = dispatcherPath.getServletUrlMapping();
 					if (servletUrlMapping.equals("/") && singleDispatcherServlet()) {
@@ -269,7 +264,6 @@ public class WebMvcAutoConfiguration {
 		@Override
 		public void configureContentNegotiation(ContentNegotiationConfigurer configurer) {
 			WebMvcProperties.Contentnegotiation contentnegotiation = this.mvcProperties.getContentnegotiation();
-			configurer.favorPathExtension(contentnegotiation.isFavorPathExtension());
 			configurer.favorParameter(contentnegotiation.isFavorParameter());
 			if (contentnegotiation.getParameterName() != null) {
 				configurer.parameterName(contentnegotiation.getParameterName());
@@ -329,7 +323,8 @@ public class WebMvcAutoConfiguration {
 				logger.debug("Default resource handling disabled");
 				return;
 			}
-			addResourceHandler(registry, "/webjars/**", "classpath:/META-INF/resources/webjars/");
+			addResourceHandler(registry, this.mvcProperties.getWebjarsPathPattern(),
+					"classpath:/META-INF/resources/webjars/");
 			addResourceHandler(registry, this.mvcProperties.getStaticPathPattern(), (registration) -> {
 				registration.addResourceLocations(this.resourceProperties.getStaticLocations());
 				if (this.servletContext != null) {
@@ -413,9 +408,14 @@ public class WebMvcAutoConfiguration {
 				@Qualifier("mvcValidator") Validator validator) {
 			RequestMappingHandlerAdapter adapter = super.requestMappingHandlerAdapter(contentNegotiationManager,
 					conversionService, validator);
+			setIgnoreDefaultModelOnRedirect(adapter);
+			return adapter;
+		}
+
+		@SuppressWarnings({ "deprecation", "removal" })
+		private void setIgnoreDefaultModelOnRedirect(RequestMappingHandlerAdapter adapter) {
 			adapter.setIgnoreDefaultModelOnRedirect(
 					this.mvcProperties == null || this.mvcProperties.isIgnoreDefaultModelOnRedirect());
-			return adapter;
 		}
 
 		@Override
@@ -455,7 +455,9 @@ public class WebMvcAutoConfiguration {
 		@Override
 		@Bean
 		@ConditionalOnMissingBean(name = DispatcherServlet.THEME_RESOLVER_BEAN_NAME)
-		public ThemeResolver themeResolver() {
+		@Deprecated(since = "3.0.0", forRemoval = false)
+		@SuppressWarnings("deprecation")
+		public org.springframework.web.servlet.ThemeResolver themeResolver() {
 			return super.themeResolver();
 		}
 
@@ -638,6 +640,18 @@ public class WebMvcAutoConfiguration {
 				resolver.addContentVersionStrategy(paths);
 			}
 			return resolver;
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	@ConditionalOnProperty(prefix = "spring.mvc.problemdetails", name = "enabled", havingValue = "true")
+	static class ProblemDetailsErrorHandlingConfiguration {
+
+		@Bean
+		@ConditionalOnMissingBean(ResponseEntityExceptionHandler.class)
+		ProblemDetailsExceptionHandler problemDetailsExceptionHandler() {
+			return new ProblemDetailsExceptionHandler();
 		}
 
 	}

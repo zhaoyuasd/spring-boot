@@ -61,7 +61,6 @@ class JarFileWrapperTests {
 	@AfterEach
 	void cleanup() throws Exception {
 		this.parent.close();
-		this.wrapper.close();
 	}
 
 	private File createTempJar(File temp) throws IOException {

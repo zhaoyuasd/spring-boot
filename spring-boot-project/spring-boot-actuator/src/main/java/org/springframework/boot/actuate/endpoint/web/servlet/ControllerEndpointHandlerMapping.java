@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,6 @@ public class ControllerEndpointHandlerMapping extends RequestMappingHandlerMappi
 	 * @param endpoints the web endpoints
 	 * @param corsConfiguration the CORS configuration for the endpoints or {@code null}
 	 */
-	@SuppressWarnings("deprecation")
 	public ControllerEndpointHandlerMapping(EndpointMapping endpointMapping,
 			Collection<ExposableControllerEndpoint> endpoints, CorsConfiguration corsConfiguration) {
 		Assert.notNull(endpointMapping, "EndpointMapping must not be null");

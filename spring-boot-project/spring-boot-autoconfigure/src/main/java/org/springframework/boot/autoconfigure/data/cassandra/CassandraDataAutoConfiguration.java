@@ -69,7 +69,7 @@ public class CassandraDataAutoConfiguration {
 
 	@Bean
 	@ConditionalOnMissingBean
-	public CassandraManagedTypes cassandraManagedTypes(BeanFactory beanFactory) throws ClassNotFoundException {
+	public static CassandraManagedTypes cassandraManagedTypes(BeanFactory beanFactory) throws ClassNotFoundException {
 		List<String> packages = EntityScanPackages.get(beanFactory).getPackageNames();
 		if (packages.isEmpty() && AutoConfigurationPackages.has(beanFactory)) {
 			packages = AutoConfigurationPackages.get(beanFactory);
@@ -108,7 +108,7 @@ public class CassandraDataAutoConfiguration {
 		session.setSession(this.session);
 		session.setConverter(converter);
 		Binder binder = Binder.get(environment);
-		binder.bind("spring.data.cassandra.schema-action", SchemaAction.class).ifBound(session::setSchemaAction);
+		binder.bind("spring.cassandra.schema-action", SchemaAction.class).ifBound(session::setSchemaAction);
 		return session;
 	}
 

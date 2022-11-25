@@ -18,6 +18,7 @@ package org.springframework.boot.actuate.autoconfigure.tracing.zipkin;
 
 import java.io.IOException;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
@@ -86,7 +87,7 @@ class ZipkinRestTemplateSenderTests extends ZipkinHttpSenderTests {
 		this.mockServer.expect(requestTo(ZIPKIN_URL)).andExpect(method(HttpMethod.POST))
 				.andExpect(content().contentType("application/json")).andExpect(content().string("[span1,span2]"))
 				.andRespond(withStatus(HttpStatus.ACCEPTED));
-		this.makeRequest(List.of(toByteArray("span1"), toByteArray("span2")), async);
+		makeRequest(List.of(toByteArray("span1"), toByteArray("span2")), async);
 	}
 
 	@ParameterizedTest
@@ -95,12 +96,13 @@ class ZipkinRestTemplateSenderTests extends ZipkinHttpSenderTests {
 		this.mockServer.expect(requestTo(ZIPKIN_URL)).andExpect(method(HttpMethod.POST))
 				.andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
 		if (async) {
-			CallbackResult callbackResult = this.makeAsyncRequest(List.of());
+			CallbackResult callbackResult = makeAsyncRequest(Collections.emptyList());
 			assertThat(callbackResult.success()).isFalse();
 			assertThat(callbackResult.error()).isNotNull().hasMessageContaining("500 Internal Server Error");
 		}
 		else {
-			assertThatThrownBy(() -> this.makeSyncRequest(List.of())).hasMessageContaining("500 Internal Server Error");
+			assertThatThrownBy(() -> makeSyncRequest(Collections.emptyList()))
+					.hasMessageContaining("500 Internal Server Error");
 		}
 	}
 
@@ -114,7 +116,7 @@ class ZipkinRestTemplateSenderTests extends ZipkinHttpSenderTests {
 		this.mockServer.expect(requestTo(ZIPKIN_URL)).andExpect(method(HttpMethod.POST))
 				.andExpect(header("Content-Encoding", "gzip")).andExpect(content().contentType("application/json"))
 				.andExpect(content().bytes(compressed)).andRespond(withStatus(HttpStatus.ACCEPTED));
-		this.makeRequest(List.of(toByteArray(uncompressed)), async);
+		makeRequest(List.of(toByteArray(uncompressed)), async);
 	}
 
 }

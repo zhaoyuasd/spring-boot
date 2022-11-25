@@ -18,7 +18,6 @@ package org.springframework.boot.actuate.autoconfigure.security.servlet;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 
@@ -152,7 +151,7 @@ class ManagementWebSecurityAutoConfigurationTests {
 			SecurityFilterChain testRemoteDevToolsSecurityFilterChain = context
 					.getBean("testRemoteDevToolsSecurityFilterChain", SecurityFilterChain.class);
 			List<SecurityFilterChain> orderedSecurityFilterChains = context.getBeanProvider(SecurityFilterChain.class)
-					.orderedStream().collect(Collectors.toList());
+					.orderedStream().toList();
 			assertThat(orderedSecurityFilterChains).containsExactly(testRemoteDevToolsSecurityFilterChain,
 					testSecurityFilterChain);
 			assertThat(context).doesNotHaveBean(ManagementWebSecurityAutoConfiguration.class);
@@ -173,18 +172,17 @@ class ManagementWebSecurityAutoConfigurationTests {
 	}
 
 	@Configuration(proxyBeanMethods = false)
-	@SuppressWarnings("deprecation")
-	static class CustomSecurityConfiguration
-			extends org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter {
+	static class CustomSecurityConfiguration {
 
-		@Override
-		protected void configure(HttpSecurity http) throws Exception {
-			http.authorizeRequests((requests) -> {
-				requests.antMatchers("/foo").permitAll();
+		@Bean
+		SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+			http.authorizeHttpRequests((requests) -> {
+				requests.requestMatchers(new AntPathRequestMatcher("/foo")).permitAll();
 				requests.anyRequest().authenticated();
 			});
 			http.formLogin(Customizer.withDefaults());
 			http.httpBasic();
+			return http.build();
 		}
 
 	}
@@ -194,8 +192,8 @@ class ManagementWebSecurityAutoConfigurationTests {
 
 		@Bean
 		SecurityFilterChain testSecurityFilterChain(HttpSecurity http) throws Exception {
-			return http.antMatcher("/**").authorizeRequests((authorize) -> authorize.anyRequest().authenticated())
-					.build();
+			return http.securityMatcher("/**")
+					.authorizeHttpRequests((authorize) -> authorize.anyRequest().authenticated()).build();
 		}
 
 	}
@@ -206,8 +204,10 @@ class ManagementWebSecurityAutoConfigurationTests {
 		@Bean
 		@Order(SecurityProperties.BASIC_AUTH_ORDER - 1)
 		SecurityFilterChain testRemoteDevToolsSecurityFilterChain(HttpSecurity http) throws Exception {
-			return http.requestMatcher(new AntPathRequestMatcher("/**")).authorizeRequests().anyRequest().anonymous()
-					.and().csrf().disable().build();
+			http.securityMatcher(new AntPathRequestMatcher("/**"));
+			http.authorizeHttpRequests().anyRequest().anonymous();
+			http.csrf().disable();
+			return http.build();
 		}
 
 	}

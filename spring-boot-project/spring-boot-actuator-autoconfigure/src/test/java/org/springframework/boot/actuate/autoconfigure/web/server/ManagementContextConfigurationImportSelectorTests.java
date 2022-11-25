@@ -19,7 +19,6 @@ package org.springframework.boot.actuate.autoconfigure.web.server;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
@@ -70,6 +69,10 @@ class ManagementContextConfigurationImportSelectorTests {
 				.load(ManagementContextConfiguration.class,
 						ManagementContextConfigurationImportSelectorTests.class.getClassLoader())
 				.forEach(expected::add);
+		// Remove JerseySameManagementContextConfiguration, as it specifies
+		// ManagementContextType.SAME and we asked for ManagementContextType.CHILD
+		expected.remove(
+				"org.springframework.boot.actuate.autoconfigure.web.jersey.JerseySameManagementContextConfiguration");
 		assertThat(imports).containsExactlyInAnyOrderElementsOf(expected);
 	}
 
@@ -79,7 +82,7 @@ class ManagementContextConfigurationImportSelectorTests {
 		private final List<String> factoryNames;
 
 		private TestManagementContextConfigurationsImportSelector(Class<?>... classes) {
-			this.factoryNames = Stream.of(classes).map(Class::getName).collect(Collectors.toList());
+			this.factoryNames = Stream.of(classes).map(Class::getName).toList();
 		}
 
 		@Override

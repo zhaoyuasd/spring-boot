@@ -28,6 +28,7 @@ import org.springframework.test.context.support.AbstractTestExecutionListener;
  *
  * @author Phillip Webb
  */
+@SuppressWarnings("removal")
 public class TestDefaultTestExecutionListenersPostProcessor implements DefaultTestExecutionListenersPostProcessor {
 
 	@Override

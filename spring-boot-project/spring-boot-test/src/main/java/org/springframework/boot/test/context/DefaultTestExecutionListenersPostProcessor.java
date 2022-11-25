@@ -18,6 +18,7 @@ package org.springframework.boot.test.context;
 
 import java.util.List;
 
+import org.springframework.test.context.ApplicationContextFailureProcessor;
 import org.springframework.test.context.TestExecutionListener;
 
 /**
@@ -28,9 +29,11 @@ import org.springframework.test.context.TestExecutionListener;
  *
  * @author Phillip Webb
  * @since 1.4.1
- * @see SpringBootTest
+ * @deprecated since 3.0.0 removal in 3.2.0 in favor of
+ * {@link ApplicationContextFailureProcessor}
  */
 @FunctionalInterface
+@Deprecated(since = "3.0.0", forRemoval = true)
 public interface DefaultTestExecutionListenersPostProcessor {
 
 	/**

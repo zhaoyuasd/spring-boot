@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,9 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.exceptions.SessionExpiredException;
-import org.neo4j.driver.reactive.RxResult;
-import org.neo4j.driver.reactive.RxSession;
+import org.neo4j.driver.reactivestreams.ReactiveResult;
+import org.neo4j.driver.reactivestreams.ReactiveSession;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
@@ -64,11 +65,13 @@ public final class Neo4jReactiveHealthIndicator extends AbstractReactiveHealthIn
 	Mono<Neo4jHealthDetails> runHealthCheckQuery() {
 		// We use WRITE here to make sure UP is returned for a server that supports
 		// all possible workloads
-		return Mono.using(() -> this.driver.rxSession(Neo4jHealthIndicator.DEFAULT_SESSION_CONFIG), (session) -> {
-			RxResult result = session.run(Neo4jHealthIndicator.CYPHER);
-			return Mono.from(result.records()).zipWhen((record) -> Mono.from(result.consume()))
-					.map((tuple) -> new Neo4jHealthDetails(tuple.getT1(), tuple.getT2()));
-		}, RxSession::close);
+		return Mono.using(() -> this.driver.session(ReactiveSession.class, Neo4jHealthIndicator.DEFAULT_SESSION_CONFIG),
+				(session) -> {
+					Mono<ReactiveResult> resultMono = Flux.from(session.run(Neo4jHealthIndicator.CYPHER)).single();
+					return resultMono
+							.flatMapMany((result) -> Flux.from(result.records()).zipWith(Flux.from(result.consume())))
+							.map((tuple) -> new Neo4jHealthDetails(tuple.getT1(), tuple.getT2())).single();
+				}, ReactiveSession::close);
 	}
 
 }

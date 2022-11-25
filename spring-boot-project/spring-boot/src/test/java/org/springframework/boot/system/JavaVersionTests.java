@@ -91,4 +91,10 @@ class JavaVersionTests {
 		assertThat(JavaVersion.getJavaVersion()).isEqualTo(JavaVersion.EIGHTEEN);
 	}
 
+	@Test
+	@EnabledOnJre(JRE.JAVA_19)
+	void currentJavaVersionNineteen() {
+		assertThat(JavaVersion.getJavaVersion()).isEqualTo(JavaVersion.NINETEEN);
+	}
+
 }

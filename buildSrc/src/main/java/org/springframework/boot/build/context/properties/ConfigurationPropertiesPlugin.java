@@ -23,14 +23,17 @@ import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.file.RegularFile;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginExtension;
+import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.TaskProvider;
 import org.gradle.api.tasks.compile.JavaCompile;
 import org.gradle.language.base.plugins.LifecycleBasePlugin;
 
+import org.springframework.boot.build.processors.ProcessedAnnotationsPlugin;
 import org.springframework.util.StringUtils;
 
 /**
@@ -39,6 +42,7 @@ import org.springframework.util.StringUtils;
  *
  * <ul>
  * <li>Adding a dependency on the configuration properties annotation processor.
+ * <li>Disables incremental compilation to avoid property descriptions being lost.
  * <li>Configuring the additional metadata locations annotation processor compiler
  * argument.
  * <li>Adding the outputs of the processResources task as inputs of the compileJava task
@@ -64,21 +68,36 @@ public class ConfigurationPropertiesPlugin implements Plugin<Project> {
 	 */
 	public static final String CHECK_ADDITIONAL_SPRING_CONFIGURATION_METADATA_TASK_NAME = "checkAdditionalSpringConfigurationMetadata";
 
+	/**
+	 * Name of the {@link CheckAdditionalSpringConfigurationMetadata} task.
+	 */
+	public static final String CHECK_SPRING_CONFIGURATION_METADATA_TASK_NAME = "checkSpringConfigurationMetadata";
+
 	@Override
 	public void apply(Project project) {
 		project.getPlugins().withType(JavaPlugin.class, (javaPlugin) -> {
-			addConfigurationProcessorDependency(project);
+			configureConfigurationPropertiesAnnotationProcessor(project);
+			disableIncrementalCompilation(project);
 			configureAdditionalMetadataLocationsCompilerArgument(project);
 			registerCheckAdditionalMetadataTask(project);
+			registerCheckMetadataTask(project);
 			addMetadataArtifact(project);
 		});
 	}
 
-	private void addConfigurationProcessorDependency(Project project) {
+	private void configureConfigurationPropertiesAnnotationProcessor(Project project) {
 		Configuration annotationProcessors = project.getConfigurations()
 				.getByName(JavaPlugin.ANNOTATION_PROCESSOR_CONFIGURATION_NAME);
 		annotationProcessors.getDependencies().add(project.getDependencies().project(Collections.singletonMap("path",
 				":spring-boot-project:spring-boot-tools:spring-boot-configuration-processor")));
+		project.getPlugins().apply(ProcessedAnnotationsPlugin.class);
+	}
+
+	private void disableIncrementalCompilation(Project project) {
+		SourceSet mainSourceSet = project.getExtensions().getByType(JavaPluginExtension.class).getSourceSets()
+				.getByName(SourceSet.MAIN_SOURCE_SET_NAME);
+		project.getTasks().named(mainSourceSet.getCompileJavaTaskName(), JavaCompile.class)
+				.configure((compileJava) -> compileJava.getOptions().setIncremental(false));
 	}
 
 	private void addMetadataArtifact(Project project) {
@@ -116,6 +135,24 @@ public class ConfigurationPropertiesPlugin implements Plugin<Project> {
 			check.include("META-INF/additional-spring-configuration-metadata.json");
 			check.getReportLocation().set(project.getLayout().getBuildDirectory()
 					.file("reports/additional-spring-configuration-metadata/check.txt"));
+		});
+		project.getTasks().named(LifecycleBasePlugin.CHECK_TASK_NAME)
+				.configure((check) -> check.dependsOn(checkConfigurationMetadata));
+	}
+
+	private void registerCheckMetadataTask(Project project) {
+		TaskProvider<CheckSpringConfigurationMetadata> checkConfigurationMetadata = project.getTasks()
+				.register(CHECK_SPRING_CONFIGURATION_METADATA_TASK_NAME, CheckSpringConfigurationMetadata.class);
+		checkConfigurationMetadata.configure((check) -> {
+			SourceSet mainSourceSet = project.getExtensions().getByType(JavaPluginExtension.class).getSourceSets()
+					.getByName(SourceSet.MAIN_SOURCE_SET_NAME);
+			Provider<RegularFile> metadataLocation = project.getTasks()
+					.named(mainSourceSet.getCompileJavaTaskName(), JavaCompile.class)
+					.flatMap((javaCompile) -> javaCompile.getDestinationDirectory()
+							.file("META-INF/spring-configuration-metadata.json"));
+			check.getMetadataLocation().set(metadataLocation);
+			check.getReportLocation().set(
+					project.getLayout().getBuildDirectory().file("reports/spring-configuration-metadata/check.txt"));
 		});
 		project.getTasks().named(LifecycleBasePlugin.CHECK_TASK_NAME)
 				.configure((check) -> check.dependsOn(checkConfigurationMetadata));

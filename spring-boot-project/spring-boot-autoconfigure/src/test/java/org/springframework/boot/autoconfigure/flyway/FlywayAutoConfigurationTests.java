@@ -41,9 +41,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 
+import org.springframework.aot.hint.RuntimeHints;
+import org.springframework.aot.hint.predicate.RuntimeHintsPredicates;
 import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration.FlywayAutoConfigurationRuntimeHints;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
 import org.springframework.boot.autoconfigure.jdbc.EmbeddedDataSourceConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -94,6 +97,7 @@ import static org.mockito.Mockito.mock;
  * @author András Deák
  * @author Takaaki Shimbo
  * @author Chris Bono
+ * @author Moritz Halbritter
  */
 @ExtendWith(OutputCaptureExtension.class)
 class FlywayAutoConfigurationTests {
@@ -468,6 +472,17 @@ class FlywayAutoConfigurationTests {
 	}
 
 	@Test
+	void callbackAndMigrationBeansAreAppliedToConfigurationBeforeCustomizersAreCalled() {
+		this.contextRunner
+				.withUserConfiguration(EmbeddedDataSourceConfiguration.class, FlywayJavaMigrationsConfiguration.class,
+						CallbackConfiguration.class)
+				.withBean(FlywayConfigurationCustomizer.class, () -> (configuration) -> {
+					assertThat(configuration.getCallbacks()).isNotEmpty();
+					assertThat(configuration.getJavaMigrations()).isNotEmpty();
+				}).run((context) -> assertThat(context).hasNotFailed());
+	}
+
+	@Test
 	void batchIsCorrectlyMapped() {
 		this.contextRunner.withUserConfiguration(EmbeddedDataSourceConfiguration.class)
 				.withPropertyValues("spring.flyway.batch=true").run(validateFlywayTeamsPropertyOnly("batch"));
@@ -643,6 +658,20 @@ class FlywayAutoConfigurationTests {
 				.run((context) -> assertThat(
 						context.getBean(Flyway.class).getConfiguration().getScriptPlaceholderSuffix())
 								.isEqualTo("SPS"));
+	}
+
+	@Test
+	void containsResourceProviderCustomizer() {
+		this.contextRunner.withPropertyValues("spring.flyway.url:jdbc:hsqldb:mem:" + UUID.randomUUID())
+				.run((context) -> assertThat(context).hasSingleBean(ResourceProviderCustomizer.class));
+	}
+
+	@Test
+	void shouldRegisterResourceHints() {
+		RuntimeHints runtimeHints = new RuntimeHints();
+		new FlywayAutoConfigurationRuntimeHints().registerHints(runtimeHints, getClass().getClassLoader());
+		assertThat(RuntimeHintsPredicates.resource().forResource("db/migration/")).accepts(runtimeHints);
+		assertThat(RuntimeHintsPredicates.resource().forResource("db/migration/V1__init.sql")).accepts(runtimeHints);
 	}
 
 	private ContextConsumer<AssertableApplicationContext> validateFlywayTeamsPropertyOnly(String propertyName) {

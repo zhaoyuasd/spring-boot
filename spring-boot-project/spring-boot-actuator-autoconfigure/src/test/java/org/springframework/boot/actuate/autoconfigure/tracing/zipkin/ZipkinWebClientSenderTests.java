@@ -18,6 +18,7 @@ package org.springframework.boot.actuate.autoconfigure.tracing.zipkin;
 
 import java.io.IOException;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -46,7 +47,7 @@ class ZipkinWebClientSenderTests extends ZipkinHttpSenderTests {
 
 	private static MockWebServer mockBackEnd;
 
-	public static String ZIPKIN_URL;
+	private static String ZIPKIN_URL;
 
 	@BeforeAll
 	static void beforeAll() throws IOException {
@@ -92,7 +93,7 @@ class ZipkinWebClientSenderTests extends ZipkinHttpSenderTests {
 	void sendSpansShouldSendSpansToZipkin(boolean async) throws IOException, InterruptedException {
 		mockBackEnd.enqueue(new MockResponse());
 		List<byte[]> encodedSpans = List.of(toByteArray("span1"), toByteArray("span2"));
-		this.makeRequest(encodedSpans, async);
+		makeRequest(encodedSpans, async);
 
 		requestAssertions((request) -> {
 			assertThat(request.getMethod()).isEqualTo("POST");
@@ -106,12 +107,13 @@ class ZipkinWebClientSenderTests extends ZipkinHttpSenderTests {
 	void sendSpansShouldHandleHttpFailures(boolean async) throws InterruptedException {
 		mockBackEnd.enqueue(new MockResponse().setResponseCode(500));
 		if (async) {
-			CallbackResult callbackResult = this.makeAsyncRequest(List.of());
+			CallbackResult callbackResult = makeAsyncRequest(Collections.emptyList());
 			assertThat(callbackResult.success()).isFalse();
 			assertThat(callbackResult.error()).isNotNull().hasMessageContaining("500 Internal Server Error");
 		}
 		else {
-			assertThatThrownBy(() -> this.makeSyncRequest(List.of())).hasMessageContaining("500 Internal Server Error");
+			assertThatThrownBy(() -> makeSyncRequest(Collections.emptyList()))
+					.hasMessageContaining("500 Internal Server Error");
 		}
 
 		requestAssertions((request) -> assertThat(request.getMethod()).isEqualTo("POST"));
@@ -127,7 +129,7 @@ class ZipkinWebClientSenderTests extends ZipkinHttpSenderTests {
 
 		mockBackEnd.enqueue(new MockResponse());
 
-		this.makeRequest(List.of(toByteArray(uncompressed)), async);
+		makeRequest(List.of(toByteArray(uncompressed)), async);
 
 		requestAssertions((request) -> {
 			assertThat(request.getMethod()).isEqualTo("POST");

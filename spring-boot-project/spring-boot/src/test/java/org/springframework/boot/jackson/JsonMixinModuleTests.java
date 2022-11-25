@@ -19,7 +19,6 @@ package org.springframework.boot.jackson;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.Module;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,6 +29,8 @@ import org.springframework.boot.jackson.scan.a.RenameMixInClass;
 import org.springframework.boot.jackson.scan.b.RenameMixInAbstractClass;
 import org.springframework.boot.jackson.scan.c.RenameMixInInterface;
 import org.springframework.boot.jackson.scan.d.EmptyMixInClass;
+import org.springframework.boot.jackson.types.Name;
+import org.springframework.boot.jackson.types.NameAndAge;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.util.ClassUtils;
 
@@ -53,6 +54,8 @@ class JsonMixinModuleTests {
 	}
 
 	@Test
+	@Deprecated(since = "3.0.0", forRemoval = true)
+	@SuppressWarnings("removal")
 	void createWhenContextIsNullShouldThrowException() {
 		assertThatIllegalArgumentException().isThrownBy(() -> new JsonMixinModule(null, Collections.emptyList()))
 				.withMessageContaining("Context must not be null");
@@ -90,11 +93,18 @@ class JsonMixinModuleTests {
 
 	private void load(Class<?>... basePackageClasses) {
 		AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
-		List<String> basePackages = Arrays.stream(basePackageClasses).map(ClassUtils::getPackageName)
-				.collect(Collectors.toList());
-		context.registerBean(JsonMixinModule.class, () -> new JsonMixinModule(context, basePackages));
+		context.registerBean(JsonMixinModule.class, () -> createJsonMixinModule(context, basePackageClasses));
 		context.refresh();
 		this.context = context;
+	}
+
+	private JsonMixinModule createJsonMixinModule(AnnotationConfigApplicationContext context,
+			Class<?>... basePackageClasses) {
+		List<String> basePackages = Arrays.stream(basePackageClasses).map(ClassUtils::getPackageName).toList();
+		JsonMixinModuleEntries entries = JsonMixinModuleEntries.scan(context, basePackages);
+		JsonMixinModule jsonMixinModule = new JsonMixinModule();
+		jsonMixinModule.registerEntries(entries, context.getClassLoader());
+		return jsonMixinModule;
 	}
 
 	private void assertMixIn(Module module, Name value, String expectedJson) throws Exception {

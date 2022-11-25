@@ -16,17 +16,13 @@
 
 package org.springframework.boot.actuate.autoconfigure.web.server;
 
-import java.net.URL;
 import java.util.function.Consumer;
 
-import org.apache.catalina.webresources.TomcatURLStreamHandlerFactory;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import org.springframework.aot.test.generator.compile.CompileWithTargetClassAccess;
-import org.springframework.aot.test.generator.compile.TestCompiler;
+import org.springframework.aot.AotDetector;
+import org.springframework.aot.test.generate.TestGenerationContext;
 import org.springframework.boot.actuate.autoconfigure.endpoint.EndpointAutoConfiguration;
 import org.springframework.boot.actuate.autoconfigure.endpoint.web.WebEndpointAutoConfiguration;
 import org.springframework.boot.actuate.autoconfigure.web.servlet.ServletManagementContextAutoConfiguration;
@@ -36,14 +32,15 @@ import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.util.TestPropertyValues;
+import org.springframework.boot.testsupport.web.servlet.DirtiesUrlFactories;
 import org.springframework.boot.web.servlet.context.AnnotationConfigServletWebServerApplicationContext;
 import org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.aot.ApplicationContextAotGenerator;
 import org.springframework.context.support.GenericApplicationContext;
+import org.springframework.core.test.tools.CompileWithForkedClassLoader;
+import org.springframework.core.test.tools.TestCompiler;
 import org.springframework.javapoet.ClassName;
-import org.springframework.test.aot.generate.TestGenerationContext;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.util.StringUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,17 +51,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Phillip Webb
  */
 @ExtendWith(OutputCaptureExtension.class)
+@DirtiesUrlFactories
 class ChildManagementContextInitializerAotTests {
 
-	@BeforeEach
-	@AfterEach
-	void reset() {
-		ReflectionTestUtils.setField(TomcatURLStreamHandlerFactory.class, "instance", null);
-		ReflectionTestUtils.setField(URL.class, "factory", null);
-	}
-
 	@Test
-	@CompileWithTargetClassAccess
+	@CompileWithForkedClassLoader
 	@SuppressWarnings("unchecked")
 	void aotContributedInitializerStartsManagementContext(CapturedOutput output) {
 		WebApplicationContextRunner contextRunner = new WebApplicationContextRunner(
@@ -75,18 +66,19 @@ class ChildManagementContextInitializerAotTests {
 								EndpointAutoConfiguration.class));
 		contextRunner.withPropertyValues("server.port=0", "management.server.port=0").prepare((context) -> {
 			TestGenerationContext generationContext = new TestGenerationContext(TestTarget.class);
-			ClassName className = new ApplicationContextAotGenerator().generateApplicationContext(
+			ClassName className = new ApplicationContextAotGenerator().processAheadOfTime(
 					(GenericApplicationContext) context.getSourceApplicationContext(), generationContext);
 			generationContext.writeGeneratedContent();
 			TestCompiler compiler = TestCompiler.forSystem();
-			compiler.withFiles(generationContext.getGeneratedFiles()).compile((compiled) -> {
+			compiler.with(generationContext).compile((compiled) -> {
 				ServletWebServerApplicationContext freshApplicationContext = new ServletWebServerApplicationContext();
 				TestPropertyValues.of("server.port=0", "management.server.port=0").applyTo(freshApplicationContext);
 				ApplicationContextInitializer<GenericApplicationContext> initializer = compiled
 						.getInstance(ApplicationContextInitializer.class, className.toString());
 				initializer.initialize(freshApplicationContext);
 				assertThat(output).satisfies(numberOfOccurrences("Tomcat started on port", 0));
-				freshApplicationContext.refresh();
+				TestPropertyValues.of(AotDetector.AOT_ENABLED + "=true")
+						.applyToSystemProperties(freshApplicationContext::refresh);
 				assertThat(output).satisfies(numberOfOccurrences("Tomcat started on port", 2));
 			});
 		});

@@ -22,9 +22,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
 
+import org.springframework.boot.actuate.endpoint.OperationResponseBody;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
-import org.springframework.core.NativeDetector;
 
 /**
  * {@link Endpoint @Endpoint} to expose thread info.
@@ -49,47 +49,13 @@ public class ThreadDumpEndpoint {
 	}
 
 	private <T> T getFormattedThreadDump(Function<ThreadInfo[], T> formatter) {
-		ThreadDumper threadDumper = createThreadDumper();
-		return formatter.apply(threadDumper.dumpAllThreads());
-	}
-
-	private ThreadDumper createThreadDumper() {
-		if (NativeDetector.inNativeImage()) {
-			throw new ThreadDumperUnavailableException("Running in native image");
-		}
-		return new ThreadMXBeanThreadDumper();
-	}
-
-	private interface ThreadDumper {
-
-		ThreadInfo[] dumpAllThreads();
-
-	}
-
-	private static class ThreadMXBeanThreadDumper implements ThreadDumper {
-
-		@Override
-		public ThreadInfo[] dumpAllThreads() {
-			return ManagementFactory.getThreadMXBean().dumpAllThreads(true, true);
-		}
-
+		return formatter.apply(ManagementFactory.getThreadMXBean().dumpAllThreads(true, true));
 	}
 
 	/**
-	 * Exception to be thrown if the {@link ThreadDumper} cannot be created.
+	 * Description of a thread dump.
 	 */
-	static class ThreadDumperUnavailableException extends RuntimeException {
-
-		ThreadDumperUnavailableException(String message) {
-			super(message);
-		}
-
-	}
-
-	/**
-	 * A description of a thread dump. Primarily intended for serialization to JSON.
-	 */
-	public static final class ThreadDumpDescriptor {
+	public static final class ThreadDumpDescriptor implements OperationResponseBody {
 
 		private final List<ThreadInfo> threads;
 

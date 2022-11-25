@@ -30,17 +30,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import org.springframework.aot.AotDetector;
-import org.springframework.aot.hint.RuntimeHints;
-import org.springframework.aot.hint.RuntimeHintsRegistrar;
 import org.springframework.beans.BeansException;
-import org.springframework.beans.CachedIntrospectionResults;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -51,8 +47,8 @@ import org.springframework.beans.factory.support.BeanNameGenerator;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.beans.factory.xml.XmlBeanDefinitionReader;
 import org.springframework.boot.Banner.Mode;
-import org.springframework.boot.context.properties.ConfigurationPropertiesReflectionHintsProcessor;
 import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.BindableRuntimeHintsRegistrar;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
 import org.springframework.boot.convert.ApplicationConversionService;
@@ -67,7 +63,7 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.context.annotation.AnnotationConfigUtils;
 import org.springframework.context.annotation.ClassPathBeanDefinitionScanner;
 import org.springframework.context.annotation.ConfigurationClassPostProcessor;
-import org.springframework.context.aot.ApplicationContextAotInitializer;
+import org.springframework.context.aot.AotApplicationContextInitializer;
 import org.springframework.context.support.AbstractApplicationContext;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.core.GenericTypeResolver;
@@ -81,7 +77,6 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.env.MutablePropertySources;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.env.SimpleCommandLinePropertySource;
-import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.core.io.support.SpringFactoriesLoader;
@@ -93,6 +88,7 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.ObjectUtils;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.util.StringUtils;
+import org.springframework.util.function.ThrowingSupplier;
 
 /**
  * Class that can be used to bootstrap and launch a Spring application from a Java main
@@ -187,6 +183,8 @@ public class SpringApplication {
 	private static final Log logger = LogFactory.getLog(SpringApplication.class);
 
 	static final SpringApplicationShutdownHook shutdownHook = new SpringApplicationShutdownHook();
+
+	private static final ThreadLocal<SpringApplicationHook> applicationHook = new ThreadLocal<>();
 
 	private Set<Class<?>> primarySources;
 
@@ -294,7 +292,6 @@ public class SpringApplication {
 	 * @return a running {@link ApplicationContext}
 	 */
 	public ConfigurableApplicationContext run(String... args) {
-		SpringApplicationHooks.hooks().preRun(this);
 		long startTime = System.nanoTime();
 		DefaultBootstrapContext bootstrapContext = createBootstrapContext();
 		ConfigurableApplicationContext context = null;
@@ -304,23 +301,23 @@ public class SpringApplication {
 		try {
 			ApplicationArguments applicationArguments = new DefaultApplicationArguments(args);
 			ConfigurableEnvironment environment = prepareEnvironment(listeners, bootstrapContext, applicationArguments);
-			configureIgnoreBeanInfo(environment);
 			Banner printedBanner = printBanner(environment);
 			context = createApplicationContext();
 			context.setApplicationStartup(this.applicationStartup);
 			prepareContext(bootstrapContext, context, environment, listeners, applicationArguments, printedBanner);
-			if (refreshContext(context)) {
-				afterRefresh(context, applicationArguments);
-				Duration timeTakenToStartup = Duration.ofNanos(System.nanoTime() - startTime);
-				if (this.logStartupInfo) {
-					new StartupInfoLogger(this.mainApplicationClass).logStarted(getApplicationLog(),
-							timeTakenToStartup);
-				}
-				listeners.started(context, timeTakenToStartup);
-				callRunners(context, applicationArguments);
+			refreshContext(context);
+			afterRefresh(context, applicationArguments);
+			Duration timeTakenToStartup = Duration.ofNanos(System.nanoTime() - startTime);
+			if (this.logStartupInfo) {
+				new StartupInfoLogger(this.mainApplicationClass).logStarted(getApplicationLog(), timeTakenToStartup);
 			}
+			listeners.started(context, timeTakenToStartup);
+			callRunners(context, applicationArguments);
 		}
 		catch (Throwable ex) {
+			if (ex instanceof AbandonedRunException) {
+				throw ex;
+			}
 			handleRunFailure(context, ex, listeners);
 			throw new IllegalStateException(ex);
 		}
@@ -331,10 +328,12 @@ public class SpringApplication {
 			}
 		}
 		catch (Throwable ex) {
+			if (ex instanceof AbandonedRunException) {
+				throw ex;
+			}
 			handleRunFailure(context, ex, null);
 			throw new IllegalStateException(ex);
 		}
-		SpringApplicationHooks.hooks().postRun(this, context);
 		return context;
 	}
 
@@ -363,12 +362,16 @@ public class SpringApplication {
 		return environment;
 	}
 
-	private Class<? extends StandardEnvironment> deduceEnvironmentClass() {
-		return switch (this.webApplicationType) {
-			case SERVLET -> ApplicationServletEnvironment.class;
-			case REACTIVE -> ApplicationReactiveWebEnvironment.class;
-			default -> ApplicationEnvironment.class;
-		};
+	private Class<? extends ConfigurableEnvironment> deduceEnvironmentClass() {
+		Class<? extends ConfigurableEnvironment> environmentType = this.applicationContextFactory
+				.getEnvironmentType(this.webApplicationType);
+		if (environmentType == null && this.applicationContextFactory != ApplicationContextFactory.DEFAULT) {
+			environmentType = ApplicationContextFactory.DEFAULT.getEnvironmentType(this.webApplicationType);
+		}
+		if (environmentType == null) {
+			return ApplicationEnvironment.class;
+		}
+		return environmentType;
 	}
 
 	private void prepareContext(DefaultBootstrapContext bootstrapContext, ConfigurableApplicationContext context,
@@ -411,24 +414,22 @@ public class SpringApplication {
 
 	private void addAotGeneratedInitializerIfNecessary(List<ApplicationContextInitializer<?>> initializers) {
 		if (AotDetector.useGeneratedArtifacts()) {
-			String initializerClassName = this.mainApplicationClass.getName() + "__ApplicationContextInitializer";
-			if (logger.isDebugEnabled()) {
-				logger.debug("Using AOT generated initializer: " + initializerClassName);
+			List<ApplicationContextInitializer<?>> aotInitializers = new ArrayList<>(
+					initializers.stream().filter(AotApplicationContextInitializer.class::isInstance).toList());
+			if (aotInitializers.isEmpty()) {
+				String initializerClassName = this.mainApplicationClass.getName() + "__ApplicationContextInitializer";
+				aotInitializers.add(AotApplicationContextInitializer.forInitializerClasses(initializerClassName));
 			}
-			initializers.add(0,
-					(context) -> new ApplicationContextAotInitializer().initialize(context, initializerClassName));
+			initializers.removeAll(aotInitializers);
+			initializers.addAll(0, aotInitializers);
 		}
 	}
 
-	private boolean refreshContext(ConfigurableApplicationContext context) {
-		if (!SpringApplicationHooks.hooks().preRefresh(this, context)) {
-			return false;
-		}
+	private void refreshContext(ConfigurableApplicationContext context) {
 		if (this.registerShutdownHook) {
 			shutdownHook.registerApplicationContext(context);
 		}
 		refresh(context);
-		return true;
 	}
 
 	private void configureHeadlessProperty() {
@@ -439,16 +440,22 @@ public class SpringApplication {
 	private SpringApplicationRunListeners getRunListeners(String[] args) {
 		ArgumentResolver argumentResolver = ArgumentResolver.of(SpringApplication.class, this);
 		argumentResolver = argumentResolver.and(String[].class, args);
-		Collection<SpringApplicationRunListener> listeners = getSpringFactoriesInstances(
-				SpringApplicationRunListener.class, argumentResolver);
+		List<SpringApplicationRunListener> listeners = getSpringFactoriesInstances(SpringApplicationRunListener.class,
+				argumentResolver);
+		SpringApplicationHook hook = applicationHook.get();
+		SpringApplicationRunListener hookListener = (hook != null) ? hook.getRunListener(this) : null;
+		if (hookListener != null) {
+			listeners = new ArrayList<>(listeners);
+			listeners.add(hookListener);
+		}
 		return new SpringApplicationRunListeners(logger, listeners, this.applicationStartup);
 	}
 
-	private <T> Collection<T> getSpringFactoriesInstances(Class<T> type) {
+	private <T> List<T> getSpringFactoriesInstances(Class<T> type) {
 		return getSpringFactoriesInstances(type, null);
 	}
 
-	private <T> Collection<T> getSpringFactoriesInstances(Class<T> type, ArgumentResolver argumentResolver) {
+	private <T> List<T> getSpringFactoriesInstances(Class<T> type, ArgumentResolver argumentResolver) {
 		return SpringFactoriesLoader.forDefaultResourceLocation(getClassLoader()).load(type, argumentResolver);
 	}
 
@@ -456,11 +463,11 @@ public class SpringApplication {
 		if (this.environment != null) {
 			return this.environment;
 		}
-		return switch (this.webApplicationType) {
-			case SERVLET -> new ApplicationServletEnvironment();
-			case REACTIVE -> new ApplicationReactiveWebEnvironment();
-			default -> new ApplicationEnvironment();
-		};
+		ConfigurableEnvironment environment = this.applicationContextFactory.createEnvironment(this.webApplicationType);
+		if (environment == null && this.applicationContextFactory != ApplicationContextFactory.DEFAULT) {
+			environment = ApplicationContextFactory.DEFAULT.createEnvironment(this.webApplicationType);
+		}
+		return (environment != null) ? environment : new ApplicationEnvironment();
 	}
 
 	/**
@@ -519,14 +526,6 @@ public class SpringApplication {
 	 * @see #configureEnvironment(ConfigurableEnvironment, String[])
 	 */
 	protected void configureProfiles(ConfigurableEnvironment environment, String[] args) {
-	}
-
-	private void configureIgnoreBeanInfo(ConfigurableEnvironment environment) {
-		if (System.getProperty(CachedIntrospectionResults.IGNORE_BEANINFO_PROPERTY_NAME) == null) {
-			Boolean ignore = environment.getProperty(CachedIntrospectionResults.IGNORE_BEANINFO_PROPERTY_NAME,
-					Boolean.class, Boolean.TRUE);
-			System.setProperty(CachedIntrospectionResults.IGNORE_BEANINFO_PROPERTY_NAME, ignore.toString());
-		}
 	}
 
 	/**
@@ -640,7 +639,7 @@ public class SpringApplication {
 	}
 
 	private List<String> quoteProfiles(String[] profiles) {
-		return Arrays.stream(profiles).map((profile) -> "\"" + profile + "\"").collect(Collectors.toList());
+		return Arrays.stream(profiles).map((profile) -> "\"" + profile + "\"").toList();
 	}
 
 	/**
@@ -1356,6 +1355,41 @@ public class SpringApplication {
 		return exitCode;
 	}
 
+	/**
+	 * Perform the given action with the given {@link SpringApplicationHook} attached if
+	 * the action triggers an {@link SpringApplication#run(String...) application run}.
+	 * @param hook the hook to apply
+	 * @param action the action to run
+	 * @since 3.0.0
+	 * @see #withHook(SpringApplicationHook, ThrowingSupplier)
+	 */
+	public static void withHook(SpringApplicationHook hook, Runnable action) {
+		withHook(hook, () -> {
+			action.run();
+			return null;
+		});
+	}
+
+	/**
+	 * Perform the given action with the given {@link SpringApplicationHook} attached if
+	 * the action triggers an {@link SpringApplication#run(String...) application run}.
+	 * @param <T> the result type
+	 * @param hook the hook to apply
+	 * @param action the action to run
+	 * @return the result of the action
+	 * @since 3.0.0
+	 * @see #withHook(SpringApplicationHook, Runnable)
+	 */
+	public static <T> T withHook(SpringApplicationHook hook, ThrowingSupplier<T> action) {
+		applicationHook.set(hook);
+		try {
+			return action.get();
+		}
+		finally {
+			applicationHook.set(null);
+		}
+	}
+
 	private static void close(ApplicationContext context) {
 		if (context instanceof ConfigurableApplicationContext closable) {
 			closable.close();
@@ -1392,12 +1426,48 @@ public class SpringApplication {
 
 	}
 
-	static class SpringApplicationRuntimeHints implements RuntimeHintsRegistrar {
+	static class SpringApplicationRuntimeHints extends BindableRuntimeHintsRegistrar {
 
-		@Override
-		public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
-			ConfigurationPropertiesReflectionHintsProcessor.processConfigurationProperties(SpringApplication.class,
-					hints.reflection());
+		SpringApplicationRuntimeHints() {
+			super(SpringApplication.class);
+		}
+
+	}
+
+	/**
+	 * Exception that can be thrown to silently exit a running {@link SpringApplication}
+	 * without handling run failures.
+	 *
+	 * @since 3.0.0
+	 */
+	public static class AbandonedRunException extends RuntimeException {
+
+		private final ConfigurableApplicationContext applicationContext;
+
+		/**
+		 * Create a new {@link AbandonedRunException} instance.
+		 */
+		public AbandonedRunException() {
+			this(null);
+		}
+
+		/**
+		 * Create a new {@link AbandonedRunException} instance with the given application
+		 * context.
+		 * @param applicationContext the application context that was available when the
+		 * run was abandoned
+		 */
+		public AbandonedRunException(ConfigurableApplicationContext applicationContext) {
+			this.applicationContext = applicationContext;
+		}
+
+		/**
+		 * Return the application context that was available when the run was abandoned or
+		 * {@code null} if no context was available.
+		 * @return the application context
+		 */
+		public ConfigurableApplicationContext getApplicationContext() {
+			return this.applicationContext;
 		}
 
 	}

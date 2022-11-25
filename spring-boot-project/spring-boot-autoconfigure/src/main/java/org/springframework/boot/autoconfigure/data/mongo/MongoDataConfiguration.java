@@ -44,7 +44,7 @@ class MongoDataConfiguration {
 
 	@Bean
 	@ConditionalOnMissingBean
-	MongoManagedTypes mongoManagedTypes(ApplicationContext applicationContext) throws ClassNotFoundException {
+	static MongoManagedTypes mongoManagedTypes(ApplicationContext applicationContext) throws ClassNotFoundException {
 		return MongoManagedTypes.fromIterable(new EntityScanner(applicationContext).scan(Document.class));
 	}
 
@@ -52,9 +52,9 @@ class MongoDataConfiguration {
 	@ConditionalOnMissingBean
 	MongoMappingContext mongoMappingContext(MongoProperties properties, MongoCustomConversions conversions,
 			MongoManagedTypes managedTypes) {
-		PropertyMapper mapper = PropertyMapper.get().alwaysApplyingWhenNonNull();
+		PropertyMapper map = PropertyMapper.get().alwaysApplyingWhenNonNull();
 		MongoMappingContext context = new MongoMappingContext();
-		mapper.from(properties.isAutoIndexCreation()).to(context::setAutoIndexCreation);
+		map.from(properties.isAutoIndexCreation()).to(context::setAutoIndexCreation);
 		context.setManagedTypes(managedTypes);
 		Class<?> strategyClass = properties.getFieldNamingStrategy();
 		if (strategyClass != null) {

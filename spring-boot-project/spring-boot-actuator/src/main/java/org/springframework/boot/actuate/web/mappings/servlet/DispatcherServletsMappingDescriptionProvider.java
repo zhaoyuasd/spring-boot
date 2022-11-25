@@ -23,11 +23,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import jakarta.servlet.Servlet;
 
+import org.springframework.aot.hint.BindingReflectionHintsRegistrar;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
 import org.springframework.boot.actuate.web.mappings.HandlerMethodDescription;
@@ -36,7 +36,6 @@ import org.springframework.boot.actuate.web.mappings.servlet.DispatcherServletsM
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.ImportRuntimeHints;
-import org.springframework.context.aot.BindingReflectionHintsRegistrar;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.DispatcherServlet;
@@ -104,7 +103,7 @@ public class DispatcherServletsMappingDescriptionProvider implements MappingDesc
 	}
 
 	private List<DispatcherServletMappingDescription> describeMappings(DispatcherServletHandlerMappings mappings) {
-		return mappings.getHandlerMappings().stream().flatMap(this::describe).collect(Collectors.toList());
+		return mappings.getHandlerMappings().stream().flatMap(this::describe).toList();
 	}
 
 	private <T> Stream<DispatcherServletMappingDescription> describe(T handlerMapping) {
@@ -141,7 +140,7 @@ public class DispatcherServletsMappingDescriptionProvider implements MappingDesc
 		@Override
 		public List<DispatcherServletMappingDescription> describe(RequestMappingInfoHandlerMapping handlerMapping) {
 			Map<RequestMappingInfo, HandlerMethod> handlerMethods = handlerMapping.getHandlerMethods();
-			return handlerMethods.entrySet().stream().map(this::describe).collect(Collectors.toList());
+			return handlerMethods.entrySet().stream().map(this::describe).toList();
 		}
 
 		private DispatcherServletMappingDescription describe(Entry<RequestMappingInfo, HandlerMethod> mapping) {
@@ -164,7 +163,7 @@ public class DispatcherServletsMappingDescriptionProvider implements MappingDesc
 
 		@Override
 		public List<DispatcherServletMappingDescription> describe(AbstractUrlHandlerMapping handlerMapping) {
-			return handlerMapping.getHandlerMap().entrySet().stream().map(this::describe).collect(Collectors.toList());
+			return handlerMapping.getHandlerMap().entrySet().stream().map(this::describe).toList();
 		}
 
 		private DispatcherServletMappingDescription describe(Entry<String, Object> mapping) {

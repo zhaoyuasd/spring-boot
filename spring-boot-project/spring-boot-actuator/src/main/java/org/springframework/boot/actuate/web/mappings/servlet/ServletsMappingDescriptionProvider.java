@@ -18,18 +18,17 @@ package org.springframework.boot.actuate.web.mappings.servlet;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import jakarta.servlet.Servlet;
 import jakarta.servlet.ServletContext;
 
+import org.springframework.aot.hint.BindingReflectionHintsRegistrar;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
 import org.springframework.boot.actuate.web.mappings.MappingDescriptionProvider;
 import org.springframework.boot.actuate.web.mappings.servlet.ServletsMappingDescriptionProvider.ServletsMappingDescriptionProviderRuntimeHints;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.ImportRuntimeHints;
-import org.springframework.context.aot.BindingReflectionHintsRegistrar;
 import org.springframework.web.context.WebApplicationContext;
 
 /**
@@ -46,7 +45,7 @@ public class ServletsMappingDescriptionProvider implements MappingDescriptionPro
 	public List<ServletRegistrationMappingDescription> describeMappings(ApplicationContext context) {
 		if (context instanceof WebApplicationContext webApplicationContext) {
 			return webApplicationContext.getServletContext().getServletRegistrations().values().stream()
-					.map(ServletRegistrationMappingDescription::new).collect(Collectors.toList());
+					.map(ServletRegistrationMappingDescription::new).toList();
 		}
 		return Collections.emptyList();
 	}

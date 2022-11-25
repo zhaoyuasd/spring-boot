@@ -16,8 +16,6 @@
 
 package org.springframework.boot.json;
 
-import java.util.stream.Stream;
-
 import com.fasterxml.jackson.databind.ser.std.ClassSerializer;
 import com.fasterxml.jackson.databind.ser.std.FileSerializer;
 import com.fasterxml.jackson.databind.ser.std.StdJdkSerializers.AtomicBooleanSerializer;
@@ -29,6 +27,8 @@ import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.ReflectionHints;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
+import org.springframework.aot.hint.TypeHint;
+import org.springframework.aot.hint.TypeReference;
 import org.springframework.util.ClassUtils;
 
 /**
@@ -47,10 +47,9 @@ class JacksonRuntimeHints implements RuntimeHintsRegistrar {
 	}
 
 	private void registerSerializers(ReflectionHints hints) {
-		Stream.of(AtomicBooleanSerializer.class, AtomicIntegerSerializer.class, AtomicLongSerializer.class,
-				FileSerializer.class, ClassSerializer.class, TokenBufferSerializer.class)
-				.forEach((type) -> hints.registerType(type,
-						(hint) -> hint.withMembers(MemberCategory.INVOKE_PUBLIC_CONSTRUCTORS)));
+		hints.registerTypes(TypeReference.listOf(AtomicBooleanSerializer.class, AtomicIntegerSerializer.class,
+				AtomicLongSerializer.class, FileSerializer.class, ClassSerializer.class, TokenBufferSerializer.class),
+				TypeHint.builtWith(MemberCategory.INVOKE_PUBLIC_CONSTRUCTORS));
 	}
 
 }

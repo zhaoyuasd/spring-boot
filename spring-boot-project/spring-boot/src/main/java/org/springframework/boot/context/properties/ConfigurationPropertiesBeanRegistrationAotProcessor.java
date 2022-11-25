@@ -17,6 +17,7 @@
 package org.springframework.boot.context.properties;
 
 import java.lang.reflect.Executable;
+import java.util.function.Predicate;
 
 import javax.lang.model.element.Modifier;
 
@@ -27,9 +28,11 @@ import org.springframework.beans.factory.aot.BeanRegistrationAotContribution;
 import org.springframework.beans.factory.aot.BeanRegistrationAotProcessor;
 import org.springframework.beans.factory.aot.BeanRegistrationCode;
 import org.springframework.beans.factory.aot.BeanRegistrationCodeFragments;
+import org.springframework.beans.factory.aot.BeanRegistrationCodeFragmentsDecorator;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.InstanceSupplier;
 import org.springframework.beans.factory.support.RegisteredBean;
+import org.springframework.beans.factory.support.RootBeanDefinition;
 import org.springframework.boot.context.properties.ConfigurationPropertiesBean.BindMethod;
 import org.springframework.javapoet.CodeBlock;
 
@@ -46,7 +49,7 @@ class ConfigurationPropertiesBeanRegistrationAotProcessor implements BeanRegistr
 		if (!isImmutableConfigurationPropertiesBeanDefinition(registeredBean.getMergedBeanDefinition())) {
 			return null;
 		}
-		return BeanRegistrationAotContribution.ofBeanRegistrationCodeFragmentsCustomizer(
+		return BeanRegistrationAotContribution.withCustomCodeFragments(
 				(codeFragments) -> new ConfigurationPropertiesBeanRegistrationCodeFragments(codeFragments,
 						registeredBean));
 
@@ -57,7 +60,11 @@ class ConfigurationPropertiesBeanRegistrationAotProcessor implements BeanRegistr
 				&& BindMethod.VALUE_OBJECT.equals(beanDefinition.getAttribute(BindMethod.class.getName()));
 	}
 
-	private static class ConfigurationPropertiesBeanRegistrationCodeFragments extends BeanRegistrationCodeFragments {
+	private static class ConfigurationPropertiesBeanRegistrationCodeFragments
+			extends BeanRegistrationCodeFragmentsDecorator {
+
+		private static final Predicate<String> INCLUDE_BIND_METHOD_ATTRIBUTE_FILTER = (name) -> name
+				.equals(BindMethod.class.getName());
 
 		private static final String REGISTERED_BEAN_PARAMETER_NAME = "registeredBean";
 
@@ -67,6 +74,14 @@ class ConfigurationPropertiesBeanRegistrationAotProcessor implements BeanRegistr
 				RegisteredBean registeredBean) {
 			super(codeFragments);
 			this.registeredBean = registeredBean;
+		}
+
+		@Override
+		public CodeBlock generateSetBeanDefinitionPropertiesCode(GenerationContext generationContext,
+				BeanRegistrationCode beanRegistrationCode, RootBeanDefinition beanDefinition,
+				Predicate<String> attributeFilter) {
+			return super.generateSetBeanDefinitionPropertiesCode(generationContext, beanRegistrationCode,
+					beanDefinition, INCLUDE_BIND_METHOD_ATTRIBUTE_FILTER.or(attributeFilter));
 		}
 
 		@Override

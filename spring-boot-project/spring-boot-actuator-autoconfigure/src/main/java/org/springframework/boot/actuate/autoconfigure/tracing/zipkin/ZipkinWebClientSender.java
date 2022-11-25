@@ -20,11 +20,12 @@ import reactor.core.publisher.Mono;
 import zipkin2.Call;
 import zipkin2.Callback;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.reactive.function.client.WebClient;
 
 /**
- * A {@link HttpSender} which uses {@link WebClient} for HTTP communication.
+ * An {@link HttpSender} which uses {@link WebClient} for HTTP communication.
  *
  * @author Stefan Bratanov
  */
@@ -69,12 +70,16 @@ class ZipkinWebClientSender extends HttpSender {
 
 		@Override
 		protected void doEnqueue(Callback<Void> callback) {
-			sendRequest().subscribe((__) -> callback.onSuccess(null), callback::onError);
+			sendRequest().subscribe((entity) -> callback.onSuccess(null), callback::onError);
 		}
 
 		private Mono<ResponseEntity<Void>> sendRequest() {
-			return this.webClient.post().uri(this.endpoint).headers((headers) -> headers.addAll(getDefaultHeaders()))
-					.bodyValue(getBody()).retrieve().toBodilessEntity();
+			return this.webClient.post().uri(this.endpoint).headers(this::addDefaultHeaders).bodyValue(getBody())
+					.retrieve().toBodilessEntity();
+		}
+
+		private void addDefaultHeaders(HttpHeaders headers) {
+			headers.addAll(getDefaultHeaders());
 		}
 
 	}

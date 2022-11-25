@@ -26,7 +26,6 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Function;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,6 +34,8 @@ import reactor.core.publisher.Flux;
 
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
+import org.springframework.aot.hint.annotation.Reflective;
+import org.springframework.aot.hint.annotation.ReflectiveRuntimeHintsRegistrar;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.actuate.endpoint.InvalidEndpointRequestException;
 import org.springframework.boot.actuate.endpoint.InvocationContext;
@@ -139,7 +140,6 @@ public abstract class AbstractWebMvcEndpointHandlerMapping extends RequestMappin
 	}
 
 	@Override
-	@SuppressWarnings("deprecation")
 	public void afterPropertiesSet() {
 		this.builderConfig = new RequestMappingInfo.BuilderConfiguration();
 		this.builderConfig.setPatternParser(getPatternParser());
@@ -418,6 +418,7 @@ public abstract class AbstractWebMvcEndpointHandlerMapping extends RequestMappin
 		}
 
 		@ResponseBody
+		@Reflective
 		Object handle(HttpServletRequest request, @RequestBody(required = false) Map<String, String> body) {
 			return this.operation.handle(request, body);
 		}
@@ -484,10 +485,11 @@ public abstract class AbstractWebMvcEndpointHandlerMapping extends RequestMappin
 
 	static class AbstractWebMvcEndpointHandlerMappingRuntimeHints implements RuntimeHintsRegistrar {
 
+		private final ReflectiveRuntimeHintsRegistrar reflectiveRegistrar = new ReflectiveRuntimeHintsRegistrar();
+
 		@Override
 		public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
-			hints.reflection().registerMethod(Objects.requireNonNull(
-					ReflectionUtils.findMethod(OperationHandler.class, "handle", HttpServletRequest.class, Map.class)));
+			this.reflectiveRegistrar.registerRuntimeHints(hints, OperationHandler.class);
 		}
 
 	}

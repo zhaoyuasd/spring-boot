@@ -22,7 +22,6 @@ import javax.lang.model.element.Modifier;
 
 import org.springframework.aot.generate.GeneratedMethod;
 import org.springframework.aot.generate.GenerationContext;
-import org.springframework.aot.generate.MethodReference;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.aot.BeanRegistrationAotContribution;
 import org.springframework.beans.factory.aot.BeanRegistrationAotProcessor;
@@ -163,7 +162,7 @@ class ChildManagementContextInitializer
 		public void applyTo(GenerationContext generationContext, BeanRegistrationCode beanRegistrationCode) {
 			GenerationContext managementGenerationContext = generationContext.withName("Management");
 			ClassName generatedInitializerClassName = new ApplicationContextAotGenerator()
-					.generateApplicationContext(this.managementContext, managementGenerationContext);
+					.processAheadOfTime(this.managementContext, managementGenerationContext);
 			GeneratedMethod postProcessorMethod = beanRegistrationCode.getMethods().add("addManagementInitializer",
 					(method) -> method.addJavadoc("Use AOT management context initialization")
 							.addModifiers(Modifier.PRIVATE, Modifier.STATIC)
@@ -172,8 +171,7 @@ class ChildManagementContextInitializer
 							.returns(ChildManagementContextInitializer.class)
 							.addStatement("return instance.withApplicationContextInitializer(new $L())",
 									generatedInitializerClassName));
-			beanRegistrationCode.addInstancePostProcessor(
-					MethodReference.ofStatic(beanRegistrationCode.getClassName(), postProcessorMethod.getName()));
+			beanRegistrationCode.addInstancePostProcessor(postProcessorMethod.toMethodReference());
 		}
 
 	}

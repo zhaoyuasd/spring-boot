@@ -16,6 +16,7 @@
 
 package org.springframework.boot.jdbc;
 
+import java.beans.PropertyVetoException;
 import java.lang.reflect.Method;
 import java.sql.SQLException;
 import java.util.Collections;
@@ -27,6 +28,7 @@ import java.util.function.Supplier;
 
 import javax.sql.DataSource;
 
+import com.mchange.v2.c3p0.ComboPooledDataSource;
 import com.zaxxer.hikari.HikariDataSource;
 import oracle.jdbc.datasource.OracleDataSource;
 import oracle.ucp.jdbc.PoolDataSource;
@@ -236,18 +238,6 @@ public final class DataSourceBuilder<T extends DataSource> {
 				throw new IllegalStateException("Unable to unwrap embedded database", ex);
 			}
 		}
-		try {
-			while (dataSource.isWrapperFor(DataSource.class)) {
-				DataSource unwrapped = dataSource.unwrap(DataSource.class);
-				if (unwrapped == dataSource) {
-					break;
-				}
-				dataSource = unwrapped;
-			}
-		}
-		catch (SQLException ex) {
-			// Try to continue with the existing, potentially still wrapped, DataSource
-		}
 		return new DataSourceBuilder<>(unwrap(dataSource));
 	}
 
@@ -419,6 +409,8 @@ public final class DataSourceBuilder<T extends DataSource> {
 					MappedDbcp2DataSource::new);
 			result = lookup(classLoader, type, result, "oracle.ucp.jdbc.PoolDataSourceImpl",
 					OraclePoolDataSourceProperties::new, "oracle.jdbc.OracleConnection");
+			result = lookup(classLoader, type, result, "com.mchange.v2.c3p0.ComboPooledDataSource",
+					ComboPooledDataSourceProperties::new);
 			return result;
 		}
 
@@ -674,6 +666,29 @@ public final class DataSourceBuilder<T extends DataSource> {
 					PoolDataSource::setConnectionFactoryClassName);
 			add(DataSourceProperty.USERNAME, PoolDataSource::getUser, PoolDataSource::setUser);
 			add(DataSourceProperty.PASSWORD, null, PoolDataSource::setPassword);
+		}
+
+	}
+
+	/**
+	 * {@link DataSourceProperties} for C3P0.
+	 */
+	private static class ComboPooledDataSourceProperties extends MappedDataSourceProperties<ComboPooledDataSource> {
+
+		ComboPooledDataSourceProperties() {
+			add(DataSourceProperty.URL, ComboPooledDataSource::getJdbcUrl, ComboPooledDataSource::setJdbcUrl);
+			add(DataSourceProperty.DRIVER_CLASS_NAME, ComboPooledDataSource::getDriverClass, this::setDriverClass);
+			add(DataSourceProperty.USERNAME, ComboPooledDataSource::getUser, ComboPooledDataSource::setUser);
+			add(DataSourceProperty.PASSWORD, ComboPooledDataSource::getPassword, ComboPooledDataSource::setPassword);
+		}
+
+		private void setDriverClass(ComboPooledDataSource dataSource, String driverClass) {
+			try {
+				dataSource.setDriverClass(driverClass);
+			}
+			catch (PropertyVetoException ex) {
+				throw new IllegalArgumentException(ex);
+			}
 		}
 
 	}

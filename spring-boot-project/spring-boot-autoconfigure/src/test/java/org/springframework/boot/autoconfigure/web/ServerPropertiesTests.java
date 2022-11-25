@@ -51,6 +51,8 @@ import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySource;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
+import org.springframework.boot.testsupport.web.servlet.DirtiesUrlFactories;
+import org.springframework.boot.testsupport.web.servlet.Servlet5ClassPathOverrides;
 import org.springframework.boot.web.embedded.jetty.JettyServletWebServerFactory;
 import org.springframework.boot.web.embedded.jetty.JettyWebServer;
 import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
@@ -84,6 +86,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author Chris Bono
  * @author Parviz Rozikov
  */
+@DirtiesUrlFactories
 class ServerPropertiesTests {
 
 	private final ServerProperties properties = new ServerProperties();
@@ -204,15 +207,33 @@ class ServerPropertiesTests {
 	}
 
 	@Test
+	@SuppressWarnings("removal")
+	@Deprecated(since = "3.0.0", forRemoval = true)
 	void testCustomizeHeaderSize() {
 		bind("server.max-http-header-size", "1MB");
 		assertThat(this.properties.getMaxHttpHeaderSize()).isEqualTo(DataSize.ofMegabytes(1));
+		assertThat(this.properties.getMaxHttpRequestHeaderSize()).isEqualTo(DataSize.ofMegabytes(1));
 	}
 
 	@Test
+	@SuppressWarnings("removal")
+	@Deprecated(since = "3.0.0", forRemoval = true)
 	void testCustomizeHeaderSizeUseBytesByDefault() {
 		bind("server.max-http-header-size", "1024");
 		assertThat(this.properties.getMaxHttpHeaderSize()).isEqualTo(DataSize.ofKilobytes(1));
+		assertThat(this.properties.getMaxHttpRequestHeaderSize()).isEqualTo(DataSize.ofKilobytes(1));
+	}
+
+	@Test
+	void testCustomizeMaxHttpRequestHeaderSize() {
+		bind("server.max-http-request-header-size", "1MB");
+		assertThat(this.properties.getMaxHttpRequestHeaderSize()).isEqualTo(DataSize.ofMegabytes(1));
+	}
+
+	@Test
+	void testCustomizeMaxHttpRequestHeaderSizeUseBytesByDefault() {
+		bind("server.max-http-request-header-size", "1024");
+		assertThat(this.properties.getMaxHttpRequestHeaderSize()).isEqualTo(DataSize.ofKilobytes(1));
 	}
 
 	@Test
@@ -440,6 +461,7 @@ class ServerPropertiesTests {
 	}
 
 	@Test
+	@Servlet5ClassPathOverrides
 	void jettyThreadPoolPropertyDefaultsShouldMatchServerDefault() {
 		JettyServletWebServerFactory jettyFactory = new JettyServletWebServerFactory(0);
 		JettyWebServer jetty = (JettyWebServer) jettyFactory.getWebServer();
@@ -454,6 +476,7 @@ class ServerPropertiesTests {
 	}
 
 	@Test
+	@Servlet5ClassPathOverrides
 	void jettyMaxHttpFormPostSizeMatchesDefault() {
 		JettyServletWebServerFactory jettyFactory = new JettyServletWebServerFactory(0);
 		JettyWebServer jetty = (JettyWebServer) jettyFactory
@@ -516,7 +539,8 @@ class ServerPropertiesTests {
 	}
 
 	@Test
-	@SuppressWarnings("deprecation")
+	@Deprecated(since = "3.0.0", forRemoval = true)
+	@SuppressWarnings("removal")
 	void nettyMaxChunkSizeMatchesHttpDecoderSpecDefault() {
 		assertThat(this.properties.getNetty().getMaxChunkSize().toBytes())
 				.isEqualTo(HttpDecoderSpec.DEFAULT_MAX_CHUNK_SIZE);

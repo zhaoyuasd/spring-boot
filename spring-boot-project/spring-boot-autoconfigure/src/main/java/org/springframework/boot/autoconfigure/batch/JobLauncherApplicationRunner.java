@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -229,7 +229,7 @@ public class JobLauncherApplicationRunner implements ApplicationRunner, Ordered,
 	}
 
 	private JobParameters getGetIdentifying(JobParameters parameters) {
-		HashMap<String, JobParameter> nonIdentifying = new LinkedHashMap<>(parameters.getParameters().size());
+		HashMap<String, JobParameter<?>> nonIdentifying = new LinkedHashMap<>(parameters.getParameters().size());
 		parameters.getParameters().forEach((key, value) -> {
 			if (value.isIdentifying()) {
 				nonIdentifying.put(key, value);
@@ -239,7 +239,7 @@ public class JobLauncherApplicationRunner implements ApplicationRunner, Ordered,
 	}
 
 	private JobParameters merge(JobParameters parameters, JobParameters additionals) {
-		Map<String, JobParameter> merged = new LinkedHashMap<>();
+		Map<String, JobParameter<?>> merged = new LinkedHashMap<>();
 		merged.putAll(parameters.getParameters());
 		merged.putAll(additionals.getParameters());
 		return new JobParameters(merged);

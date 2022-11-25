@@ -19,11 +19,11 @@ package org.springframework.boot.actuate.endpoint.annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 
+import org.springframework.aot.hint.BindingReflectionHintsRegistrar;
 import org.springframework.aot.hint.ReflectionHints;
 import org.springframework.aot.hint.annotation.ReflectiveProcessor;
 import org.springframework.aot.hint.annotation.SimpleReflectiveProcessor;
 import org.springframework.boot.actuate.endpoint.web.WebEndpointResponse;
-import org.springframework.context.aot.BindingReflectionHintsRegistrar;
 import org.springframework.core.ResolvableType;
 import org.springframework.core.io.Resource;
 
@@ -49,17 +49,16 @@ class OperationReflectiveProcessor extends SimpleReflectiveProcessor {
 
 	private Type extractReturnType(Method method) {
 		ResolvableType returnType = ResolvableType.forMethodReturnType(method);
-		if (WebEndpointResponse.class.isAssignableFrom(method.getReturnType())) {
-			return returnType.as(WebEndpointResponse.class).getGeneric(0).getType();
+		if (!WebEndpointResponse.class.isAssignableFrom(method.getReturnType())) {
+			return returnType.getType();
 		}
-		return returnType.getType();
+		return returnType.as(WebEndpointResponse.class).getGeneric(0).getType();
 	}
 
 	private void registerReflectionHints(ReflectionHints hints, Type type) {
-		if (type.equals(Resource.class)) {
-			return;
+		if (!type.equals(Resource.class)) {
+			this.bindingRegistrar.registerReflectionHints(hints, type);
 		}
-		this.bindingRegistrar.registerReflectionHints(hints, type);
 	}
 
 }
